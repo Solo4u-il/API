@@ -11,20 +11,24 @@ if (!apiKey) {
 }
 
 const ai = new GoogleGenAI({ apiKey });
-const sessions = new Map();
+
+const SYSTEM_INSTRUCTION = `כללי עיצוב והתאמה להקראה קולית במערכת הטלפונית:
+כללי פיסוק והשהיה להקראה קולית:
+1. אסור בהחלט להשתמש בנקודות (.) או בירידות שורה (\\n).
+2. מותר ומומלץ להשתמש בפסיקים (,) כדי ליצור עצירות נשימה והפסקות טבעיות בדיבור.
+3. סמלים במילים בלבד: לעולם אל תכתוב סמלים או תווים מיוחדים (כגון %, ₪, &, =, /, *, #). כתוב כל סמל במילים מלאות (לדוגמה: "אחוזים", "שקלים", "ועוד", "שווה").
+4. תפקידך לכתוב 5 סיפורים דמיוניים וארוכים ומפורטים ככל שניתן בכל פעם על הנושא המתבקש, תיאורים חיים, רגשות, שהמשתמש ירגיש שהוא נמצא בסיפור, תיאור מראות, מעשים, מזג רוח, רגשות, תחושות, והרגשות, פעולות, מעשים, בדגש על הדברים המבוקשים.`;
 
 function sanitizeForYemot(text) {
+  // מנקים רק תווים ששוברים את תחביר הפרמטרים של ימות המשיח (= ו-&)
   return (text || "")
     .replace(/&/g, " ו")
     .replace(/=/g, " ")
-    .replace(/\r?\n+/g, " ")
-    .replace(/--/g, "-")
-    .replace(/\.\./g, ".")
     .trim();
 }
 
 app.get("/", (req, res) => {
-  res.status(200).send("Yemot-Gemini server on Render is running!");
+  res.status(200).send("Yemot-Gemini server is running!");
 });
 
 app.all("/yemot", async (req, res) => {
@@ -32,49 +36,39 @@ app.all("/yemot", async (req, res) => {
     const params = { ...req.query, ...req.body };
 
     if (params.hangup === "yes") {
-      if (params.ApiCallId) sessions.delete(params.ApiCallId);
-      return res.send("noop=hangup_cleaned");
+      return res.send("noop=hangup");
     }
 
-    const callId = params.ApiCallId || params.ApiPhone || "default_session";
     const userInput = (
+      params.prompt ||
       params.question ||
       params.text ||
-      params.transcription ||
       ""
     ).trim();
 
     if (!userInput) {
       return res.send(
-        "read=t-שלום, במה אוכל לעזור לך? דבר לאחר הצפצוף ולסיום הקש סולמית=question,no,voice,,record,6,15"
+        "id_list_message=t-לא הוזן טקסט להמשך, אנא נסו שוב"
       );
     }
 
-    const history = sessions.get(callId) || [];
-    history.push({ role: "user", parts: [{ text: userInput }] });
-
     const response = await ai.models.generateContent({
-      model: "gemini-2.5-flash",
-      contents: history,
+      model: "gemini-3.1-flash-lite-preview",
+      contents: userInput,
       config: {
-        systemInstruction:
-          "אתה עוזר קולי בטלפון בעברית. ענה בצורה קצרה, טבעית וברורה שמתאימה להקראה קולית. הימנע מרשימות ארוכות, קישורים, אימוג'ים או סימנים מיוחדים.",
+        systemInstruction: SYSTEM_INSTRUCTION,
       },
     });
 
-    const rawReply = response.text || "לא הצלחתי להבין, נסה שוב בבקשה.";
-    history.push({ role: "model", parts: [{ text: rawReply }] });
-    sessions.set(callId, history.slice(-10));
-
+    const rawReply = response.text || "לא הופקה תשובה";
     const safeReply = sanitizeForYemot(rawReply);
 
-    return res.send(
-      `read=t-${safeReply}. לשאלה נוספת דבר לאחר הצפצוף=question,no,voice,,record,6,15`
-    );
+    // מחזיר טקסט תשובה בלבד ללא פתיחת דיאלוג נוסף
+    return res.send(`id_list_message=t-${safeReply}`);
   } catch (err) {
     console.error("Error in /yemot:", err);
     return res.send(
-      "id_list_message=t-סליחה, אירעה תקלה זמנית. נסה שוב מאוחר יותר."
+      "id_list_message=t-סליחה, אירעה שגיאה בעת קבלת התשובה, נסו שוב מאוחר יותר"
     );
   }
 });
@@ -83,3 +77,11 @@ const PORT = process.env.PORT || 10000;
 app.listen(PORT, "0.0.0.0", () => {
   console.log(`Server listening on port ${PORT}`);
 });
+```[cite: 4, 6, 8, 9, 11, 21, 35, 36, 39, 43]
+
+---
+
+### נקודה אחת קטנה לפני הבדיקה בטלפון
+* כיוון שביקשת **5 סיפורים ארוכים ומפורטים מאוד** בפנייה אחת, ייתכן שימות המשיח תנתק או תחתוך אם ההקראה ארוכה מאוד או אם לוקח ל-Gemini הרבה זמן להחזיר את כל הטקסט בבת אחת. אם תראה שזה קורה בבדיקה הראשונה, נוכל להתאים את אורך הסיפורים או לפצל את זה בקלות.
+
+איך יצאה הבדיקה הראשונה מול השלוחה?
