@@ -81,3 +81,6 @@ const PORT = process.env.PORT || 10000;
 app.listen(PORT, "0.0.0.0", () => {
   console.log(`Server listening on port ${PORT}`);
 });
+```[cite: 4, 6, 8, 9, 20, 21, 35, 36, 39, 43]
+
+אחרי שתשמור ב-GitHub ותחכה ש-Render יסיים לפרוס, תגיד לי אם השרת עלה נקי ואם יש שגיאה או תגובה בלוגים.
