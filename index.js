@@ -10,13 +10,12 @@ const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 const SYSTEM_INSTRUCTION = `כללי עיצוב והתאמה להקראה קולית במערכת הטלפונית:
 1. אסור בהחלט להשתמש בנקודות (.) או בירידות שורה (\\n).
 2. מותר ומומלץ להשתמש בפסיקים (,) כדי ליצור עצירות נשימה והפסקות טבעיות בדיבור.
-3. סמלים במילים בלבד: לעולם אל תכתוב סמלים או תווים מיוחדים (כגון %, ₪, &, =, /, *, #). כתוב כל סמל במילים מלאות (לדוגמה: "אחוזים", "שקלים", "ועוד", "שווה").
-4. תפקידך לכתוב 5 סיפורים דמיוניים וארוכים ומפורטים ככל שניתן בכל פעם על הנושא המתבקש, תיאורים חיים, רגשות, שהמשתמש ירגיש שהוא נמצא בסיפור, תיאור מראות, מעשים, מזג רוח, רגשות, תחושות, והרגשות, פעולות, מעשים, בדגש על הדברים המבוקשים.`;
+3. סמלים במילים בלבד: לעולם אל תכתוב סמלים או תווים מיוחדים (כגון %, ₪, &, =, /, *, #). כתוב כל סמל במילים מלאות.
+4. כתוב 5 סיפורים דמיוניים על הנושא המבוקש.`;
 
 function cleanForYemotTTS(raw) {
   return (raw || "")
     .replace(/[\r\n.]/g, " ")
-    // משאיר רק אותיות עבריות, מספרים, רווחים ופסיקים - מונע תווים שגורמים לשגיאת TTS
     .replace(/[^א-ת0-9,\s]/g, " ")
     .replace(/\s*,\s*/g, ", ")
     .replace(/\s+/g, " ")
@@ -48,14 +47,14 @@ app.all("/yemot", async (req, res) => {
       config: { systemInstruction: SYSTEM_INSTRUCTION },
     });
 
-    const cleaned = cleanForYemotTTS(r.text);
-    const finalText = cleaned || "לא הופקה תשובה";
+    console.log("GEMINI RAW:", JSON.stringify(r.text));
 
-    console.log("DONE /yemot, length:", finalText.length);
-    return res
-      .status(200)
-      .type("text/plain; charset=utf-8")
-      .send(`id_list_message=t-${finalText}`);
+    const cleaned = cleanForYemotTTS(r.text);
+    const finalText = (cleaned || "לא הופקה תשובה").slice(0, 1000).trim();
+    const payload = `id_list_message=t-${finalText}`;
+
+    console.log("SENDING TO YEMOT (len):", finalText.length);
+    return res.status(200).type("text/plain; charset=utf-8").send(payload);
   } catch (e) {
     console.error("ERROR /yemot:", e);
     return res
