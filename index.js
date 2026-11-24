@@ -7,7 +7,7 @@ app.use(express.json());
 
 const apiKey = process.env.GEMINI_API_KEY;
 if (!apiKey) {
-  console.warn("Warning: GEMINI_API_KEY is not set in environment variables.");
+  console.error("CRITICAL: GEMINI_API_KEY is missing in environment variables!");
 }
 
 const ai = new GoogleGenAI({ apiKey });
@@ -33,6 +33,7 @@ app.get("/", (req, res) => {
 app.all("/yemot", async (req, res) => {
   try {
     const params = { ...req.query, ...req.body };
+    console.log("Incoming Yemot params:", JSON.stringify(params));
 
     if (params.hangup === "yes") {
       return res.send("noop=hangup");
@@ -46,10 +47,13 @@ app.all("/yemot", async (req, res) => {
     ).trim();
 
     if (!userInput) {
+      console.log("No userInput received yet.");
       return res.send(
-        "id_list_message=t-לא הוזן טקסט להמשך, אנא נסו שוב"
+        "id_list_message=t-לא התקבל טקסט להקשה, אנא נסו שוב"
       );
     }
+
+    console.log("Sending to Gemini:", userInput);
 
     const response = await ai.models.generateContent({
       model: "gemini-3.1-flash-lite",
@@ -62,11 +66,13 @@ app.all("/yemot", async (req, res) => {
     const rawReply = response.text || "לא הופקה תשובה";
     const safeReply = sanitizeForYemot(rawReply);
 
+    console.log("Sending back to Yemot (length):", safeReply.length);
+
     return res.send(`id_list_message=t-${safeReply}`);
   } catch (err) {
     console.error("Error in /yemot:", err);
     return res.send(
-      "id_list_message=t-סליחה, אירעה שגיאה בעת קבלת התשובה, נסו שוב מאוחר יותר"
+      "id_list_message=t-סליחה, אירעה תקלה בשרת, נסו שוב מאוחר יותר"
     );
   }
 });
