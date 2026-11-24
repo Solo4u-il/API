@@ -5,12 +5,7 @@ const app = express();
 app.use(express.urlencoded({ extended: true }));
 app.use(express.json());
 
-const apiKey = process.env.GEMINI_API_KEY;
-if (!apiKey) {
-  console.error("CRITICAL: GEMINI_API_KEY is missing in environment variables!");
-}
-
-const ai = new GoogleGenAI({ apiKey });
+const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 
 const SYSTEM_INSTRUCTION = `כללי עיצוב והתאמה להקראה קולית במערכת הטלפונית:
 כללי פיסוק והשהיה להקראה קולית:
@@ -19,68 +14,33 @@ const SYSTEM_INSTRUCTION = `כללי עיצוב והתאמה להקראה קול
 3. סמלים במילים בלבד: לעולם אל תכתוב סמלים או תווים מיוחדים (כגון %, ₪, &, =, /, *, #). כתוב כל סמל במילים מלאות (לדוגמה: "אחוזים", "שקלים", "ועוד", "שווה").
 4. תפקידך לכתוב 5 סיפורים דמיוניים וארוכים ומפורטים ככל שניתן בכל פעם על הנושא המתבקש, תיאורים חיים, רגשות, שהמשתמש ירגיש שהוא נמצא בסיפור, תיאור מראות, מעשים, מזג רוח, רגשות, תחושות, והרגשות, פעולות, מעשים, בדגש על הדברים המבוקשים.`;
 
-function sanitizeForYemot(text) {
-  return (text || "")
-    .replace(/&/g, " ו")
-    .replace(/=/g, " ")
-    .trim();
-}
-
 app.get("/", (req, res) => {
-  res.status(200).send("Yemot-Gemini server is running!");
+  res.status(200).send("OK");
 });
 
 app.all("/yemot", async (req, res) => {
   try {
-    const params = { ...req.query, ...req.body };
-    console.log("Incoming Yemot params:", JSON.stringify(params));
+    const p = { ...req.query, ...req.body };
+    if (p.hangup === "yes") return res.send("noop=hangup");
 
-    if (params.hangup === "yes") {
-      return res.send("noop=hangup");
+    const input = (p.prompt || p.question || p.text || "").trim();
+    if (!input) {
+      return res.send("id_list_message=t-לא התקבל טקסט, נסו שוב");
     }
 
-    const userInput = (
-      params.prompt ||
-      params.question ||
-      params.text ||
-      ""
-    ).trim();
-
-    if (!userInput) {
-      console.log("No userInput received yet.");
-      return res.send(
-        "id_list_message=t-לא התקבל טקסט להקשה, אנא נסו שוב"
-      );
-    }
-
-    console.log("Sending to Gemini:", userInput);
-
-    const response = await ai.models.generateContent({
+    const r = await ai.models.generateContent({
       model: "gemini-3.1-flash-lite",
-      contents: userInput,
-      config: {
-        systemInstruction: SYSTEM_INSTRUCTION,
-      },
+      contents: input,
+      config: { systemInstruction: SYSTEM_INSTRUCTION },
     });
 
-    const rawReply = response.text || "לא הופקה תשובה";
-    const safeReply = sanitizeForYemot(rawReply);
-
-    console.log("Sending back to Yemot (length):", safeReply.length);
-
-    return res.send(`id_list_message=t-${safeReply}`);
-  } catch (err) {
-    console.error("Error in /yemot:", err);
-    return res.send(
-      "id_list_message=t-סליחה, אירעה תקלה בשרת, נסו שוב מאוחר יותר"
-    );
+    const text = (r.text || "לא הופקה תשובה").replace(/&/g, " ו").replace(/=/g, " ").trim();
+    return res.send(`id_list_message=t-${text}`);
+  } catch (e) {
+    console.error(e);
+    return res.send("id_list_message=t-אירעה שגיאה, נסו שוב מאוחר יותר");
   }
 });
 
 const PORT = process.env.PORT || 10000;
-app.listen(PORT, "0.0.0.0", () => {
-  console.log(`Server listening on port ${PORT}`);
-});
-```[cite: 4, 6, 8, 9, 20, 21, 35, 36, 39, 43]
-
-אחרי שתשמור ב-GitHub ותחכה ש-Render יסיים לפרוס, תגיד לי אם השרת עלה נקי ואם יש שגיאה או תגובה בלוגים.
+app.listen(PORT, "0.0.0.0", () => console.log("Listening on", PORT));
